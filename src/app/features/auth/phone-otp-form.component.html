@@ -1,0 +1,108 @@
+<div class="auth-shell">
+  <mat-card appearance="outlined" class="auth-card">
+    @if (loading()) {
+      <mat-progress-bar mode="indeterminate" class="auth-progress"></mat-progress-bar>
+    }
+
+    <mat-card-header>
+      <mat-card-title>{{ title() }}</mat-card-title>
+      <mat-card-subtitle>{{ subtitle() }}</mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      @if (step() === 'phone') {
+        <form [formGroup]="phoneForm" (ngSubmit)="submitPhone()" class="auth-form">
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Phone number</mat-label>
+            <input
+              matInput
+              type="tel"
+              formControlName="phoneNumber"
+              placeholder="+905551234567"
+              autocomplete="tel"
+              inputmode="tel"
+              required
+              (keydown)="onPhoneKeydown($event)"
+              (focus)="onPhoneFocus($event)"
+              (click)="onPhoneClick($event)"
+            />
+            <mat-icon matSuffix>phone</mat-icon>
+            <mat-hint>Turkey (+90) · 10 digits after the prefix</mat-hint>
+            @if (phoneForm.controls.phoneNumber.hasError('required') && phoneForm.controls.phoneNumber.touched) {
+              <mat-error>Phone number is required.</mat-error>
+            }
+            @if (phoneForm.controls.phoneNumber.hasError('pattern')) {
+              <mat-error>Enter 10 digits after +90, e.g. +905551234567.</mat-error>
+            }
+          </mat-form-field>
+
+          <button
+            mat-flat-button
+            color="primary"
+            type="submit"
+            class="full-width"
+            [disabled]="phoneForm.invalid || loading()"
+          >
+            {{ primaryCta() }}
+          </button>
+        </form>
+      } @else {
+        <form [formGroup]="otpForm" (ngSubmit)="submitOtp()" class="auth-form">
+          <p class="otp-hint">
+            Enter the 6-digit code sent to
+            <strong>{{ submittedPhone() }}</strong>.
+            <button mat-button type="button" color="primary" (click)="editPhone()">
+              Change
+            </button>
+          </p>
+
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Verification code</mat-label>
+            <input
+              matInput
+              type="text"
+              inputmode="numeric"
+              maxlength="6"
+              formControlName="code"
+              placeholder="123456"
+              autocomplete="one-time-code"
+              required
+            />
+            <mat-icon matSuffix>sms</mat-icon>
+            @if (otpForm.controls.code.hasError('required') && otpForm.controls.code.touched) {
+              <mat-error>Verification code is required.</mat-error>
+            }
+            @if (otpForm.controls.code.hasError('pattern')) {
+              <mat-error>Enter the 6-digit code.</mat-error>
+            }
+          </mat-form-field>
+
+          <button
+            mat-flat-button
+            color="primary"
+            type="submit"
+            class="full-width"
+            [disabled]="otpForm.invalid || loading()"
+          >
+            Verify & continue
+          </button>
+
+          <button
+            mat-button
+            type="button"
+            class="full-width"
+            [disabled]="loading()"
+            (click)="resendCode()"
+          >
+            Resend code
+          </button>
+        </form>
+      }
+    </mat-card-content>
+
+    <mat-card-actions class="auth-alt">
+      <span>{{ altPrompt() }}</span>
+      <a mat-button color="primary" [routerLink]="altRoute()">{{ altCta() }}</a>
+    </mat-card-actions>
+  </mat-card>
+</div>

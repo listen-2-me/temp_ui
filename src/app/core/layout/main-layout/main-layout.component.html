@@ -1,0 +1,65 @@
+<mat-sidenav-container class="sidenav-container">
+  <mat-sidenav
+    #drawer
+    class="sidenav"
+    [mode]="sidenavMode()"
+    [opened]="sidenavOpened()"
+  >
+    <mat-toolbar color="primary">Menu</mat-toolbar>
+    <mat-nav-list>
+      @for (item of navItems; track item.route) {
+        <a
+          mat-list-item
+          [routerLink]="item.route"
+          routerLinkActive="active-link"
+          (click)="isHandset() && drawer.close()"
+        >
+          <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
+          <span matListItemTitle>{{ item.label }}</span>
+        </a>
+      }
+    </mat-nav-list>
+  </mat-sidenav>
+
+  <mat-sidenav-content>
+    <mat-toolbar color="primary">
+      @if (isHandset()) {
+        <button mat-icon-button (click)="drawer.toggle()" aria-label="Toggle menu">
+          <mat-icon>menu</mat-icon>
+        </button>
+      }
+      <span class="app-title">Listen2Me</span>
+      <span class="spacer"></span>
+
+      <button
+        mat-button
+        [matMenuTriggerFor]="userMenu"
+        aria-label="Account menu"
+      >
+        <mat-icon>account_circle</mat-icon>
+        <span class="user-label">{{ userLabel() }}</span>
+        <mat-icon>arrow_drop_down</mat-icon>
+      </button>
+
+      <mat-menu #userMenu="matMenu">
+        <div class="menu-user">
+          <div class="menu-user__label">Signed in as</div>
+          <div class="menu-user__phone">{{ userLabel() }}</div>
+        </div>
+        <mat-divider></mat-divider>
+        <button mat-menu-item routerLink="/settings">
+          <mat-icon>settings</mat-icon>
+          <span>Settings</span>
+        </button>
+        <button mat-menu-item (click)="logout()">
+          <mat-icon>logout</mat-icon>
+          <span>Log out</span>
+        </button>
+      </mat-menu>
+    </mat-toolbar>
+
+    <main class="content-container">
+      <router-outlet />
+    </main>
+  </mat-sidenav-content>
+</mat-sidenav-container>

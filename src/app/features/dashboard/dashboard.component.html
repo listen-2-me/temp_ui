@@ -1,0 +1,66 @@
+<header class="page-header">
+  <div>
+    <h1>Dashboard</h1>
+    <p class="subtitle">
+      Total across all metrics: <strong>{{ state.total() }}</strong>
+    </p>
+  </div>
+  <button mat-raised-button color="warn" (click)="state.reset()">
+    <mat-icon>refresh</mat-icon>
+    Reset All
+  </button>
+</header>
+
+<mat-divider></mat-divider>
+
+<section class="card-grid">
+  @for (stat of state.stats(); track stat.id) {
+    <mat-card appearance="outlined" class="stat-card">
+      <mat-card-header>
+        <div mat-card-avatar class="card-avatar card-avatar--{{ stat.color }}">
+          <mat-icon>{{ stat.icon }}</mat-icon>
+        </div>
+        <mat-card-title>{{ stat.title }}</mat-card-title>
+        <mat-card-subtitle>Live metric</mat-card-subtitle>
+      </mat-card-header>
+
+      <mat-card-content>
+        <h2 class="stat-value">{{ stat.value }}</h2>
+      </mat-card-content>
+
+      <mat-card-actions align="end">
+        <button mat-stroked-button (click)="state.decrement(stat.id)">
+          <mat-icon>remove</mat-icon>
+        </button>
+        <button mat-flat-button [color]="stat.color" (click)="state.increment(stat.id)">
+          <mat-icon>add</mat-icon>
+          Increment
+        </button>
+      </mat-card-actions>
+    </mat-card>
+  }
+</section>
+
+<mat-card appearance="outlined" class="info-card">
+  <mat-card-header>
+    <mat-card-title>About this boilerplate</mat-card-title>
+    <mat-card-subtitle>Angular {{ '19' }} · Standalone · Signals</mat-card-subtitle>
+  </mat-card-header>
+  <mat-card-content>
+    <p>
+      This sample uses Angular Signals for state management, Angular Material for UI,
+      and a responsive layout driven by <code>BreakpointObserver</code>. Resize the
+      window or open on a mobile device to see the sidenav collapse.
+    </p>
+  </mat-card-content>
+  <mat-card-actions>
+    <button mat-button color="primary">
+      <mat-icon>menu_book</mat-icon>
+      Docs
+    </button>
+    <button mat-button>
+      <mat-icon>code</mat-icon>
+      Source
+    </button>
+  </mat-card-actions>
+</mat-card>
