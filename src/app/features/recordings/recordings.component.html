@@ -1,0 +1,110 @@
+<header class="page-header">
+  <div>
+    <h1>Recordings</h1>
+    <p class="subtitle">
+      @if (service.sessions().length > 0) {
+        {{ service.sessions().length }} session(s) ·
+        {{ totalFiles() }} segment(s)
+      } @else {
+        Uploaded audio for your account
+      }
+    </p>
+  </div>
+  <button
+    mat-stroked-button
+    color="primary"
+    [disabled]="service.loading()"
+    (click)="service.refresh()"
+  >
+    <mat-icon>refresh</mat-icon>
+    Refresh
+  </button>
+</header>
+
+@if (service.loading()) {
+  <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+}
+
+@if (service.error(); as err) {
+  <mat-card appearance="outlined" class="error-card">
+    <mat-card-content>
+      <mat-icon color="warn">error_outline</mat-icon>
+      <span>{{ err }}</span>
+    </mat-card-content>
+  </mat-card>
+}
+
+@if (!service.loading() && service.sessions().length === 0 && !service.error()) {
+  <mat-card appearance="outlined" class="empty-card">
+    <mat-card-content>
+      <mat-icon>inbox</mat-icon>
+      <h3>No recordings yet</h3>
+      <p>Start recording from the dashboard — segments upload here as they finish.</p>
+    </mat-card-content>
+  </mat-card>
+}
+
+@if (service.sessions().length > 0) {
+  <mat-accordion multi class="sessions">
+    @for (session of service.sessions(); track session.sessionId) {
+      <mat-expansion-panel>
+        <mat-expansion-panel-header>
+          <mat-panel-title>
+            <mat-icon>folder</mat-icon>
+            <span class="session-id">{{ session.sessionId }}</span>
+          </mat-panel-title>
+          <mat-panel-description>
+            <span>{{ session.files.length }} file(s)</span>
+            <span class="size">{{ formatSize(session.totalSize) }}</span>
+            @if (session.latestAt; as ts) {
+              <span class="ts">{{ ts | date: 'medium' }}</span>
+            }
+          </mat-panel-description>
+        </mat-expansion-panel-header>
+
+        <ul class="file-list">
+          @for (file of session.files; track file.path) {
+            <li class="file" [class.file--active]="playingPath() === file.path">
+              <button
+                mat-fab
+                color="primary"
+                class="file__play"
+                matTooltip="Play"
+                (click)="play(file)"
+              >
+                <mat-icon>play_arrow</mat-icon>
+              </button>
+
+              <div class="file__meta">
+                <div class="file__name">{{ file.name }}</div>
+                <div class="file__sub">
+                  {{ formatSize(file.size) }}
+                  @if (file.createdAt; as ts) {
+                    · {{ ts | date: 'short' }}
+                  }
+                </div>
+                @if (playingPath() === file.path) {
+                  <audio
+                    class="file__player"
+                    controls
+                    autoplay
+                    preload="none"
+                    [src]="urlFor(file)"
+                  ></audio>
+                }
+              </div>
+
+              <button
+                mat-icon-button
+                matTooltip="Download"
+                (click)="download(file)"
+              >
+                <mat-icon>download</mat-icon>
+              </button>
+            </li>
+          }
+        </ul>
+      </mat-expansion-panel>
+    }
+  </mat-accordion>
+}

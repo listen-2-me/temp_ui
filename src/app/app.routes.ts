@@ -30,6 +30,13 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'recordings',
+        loadComponent: () =>
+          import('./features/recordings/recordings.component').then(
+            m => m.RecordingsComponent,
+          ),
+      },
+      {
         path: 'settings',
         loadComponent: () =>
           import('./features/settings/settings.component').then(
