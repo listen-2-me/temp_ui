@@ -1,0 +1,76 @@
+<header class="page-header">
+  <button mat-icon-button (click)="back()" matTooltip="Back to recordings">
+    <mat-icon>arrow_back</mat-icon>
+  </button>
+  <div class="page-header__title">
+    @if (sessionDate(); as d) {
+      <h1>{{ d | date: 'EEEE, MMM d, y' }}</h1>
+      <p class="subtitle">{{ d | date: 'h:mm a' }} · {{ session()?.files?.length ?? 0 }} segment(s)</p>
+    } @else {
+      <h1 class="mono">{{ sessionId() }}</h1>
+      <p class="subtitle">{{ session()?.files?.length ?? 0 }} segment(s)</p>
+    }
+  </div>
+</header>
+
+@if (service.loading()) {
+  <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+}
+
+@if (notFound() && !service.loading()) {
+  <div class="empty">
+    <mat-icon>folder_off</mat-icon>
+    <h3>Session not found</h3>
+    <p>This session has no files or doesn't exist.</p>
+    <a mat-stroked-button color="primary" routerLink="/recordings">
+      <mat-icon>arrow_back</mat-icon>
+      Back to recordings
+    </a>
+  </div>
+}
+
+@if (session(); as s) {
+  <div class="segments">
+    @for (file of s.files; track file.path) {
+      <mat-card appearance="outlined" class="segment-card">
+        <mat-card-header>
+          <div mat-card-avatar class="segment-card__avatar">
+            <mat-icon>audiotrack</mat-icon>
+          </div>
+          <mat-card-title>{{ segmentLabel(file) }}</mat-card-title>
+          <mat-card-subtitle>
+            {{ formatSize(file.size) }}
+            @if (file.createdAt; as ts) {
+              · {{ ts | date: 'shortTime' }}
+            }
+          </mat-card-subtitle>
+        </mat-card-header>
+
+        <mat-card-content>
+          <audio
+            class="segment-card__player"
+            controls
+            preload="none"
+            [src]="urlFor(file)"
+          ></audio>
+        </mat-card-content>
+
+        <mat-card-actions align="end">
+          <a
+            mat-stroked-button
+            [href]="urlFor(file)"
+            target="_blank"
+            rel="noopener"
+          >
+            <mat-icon>open_in_new</mat-icon>
+            Open
+          </a>
+          <button mat-flat-button color="primary" (click)="download(file)">
+            <mat-icon>download</mat-icon>
+            Download
+          </button>
+        </mat-card-actions>
+      </mat-card>
+    }
+  </div>
+}

@@ -3,13 +3,9 @@
     <h1>Recordings</h1>
     <p class="subtitle">
       @if (service.sessions().length > 0) {
-        <span>{{ service.sessions().length }} session<span>{{ service.sessions().length === 1 ? '' : 's' }}</span></span>
-        <span class="dot">·</span>
-        <span>{{ totalFiles() }} segments</span>
-        <span class="dot">·</span>
-        <span>{{ formatSize(totalSize()) }}</span>
+        {{ service.sessions().length }} session(s) · {{ totalFiles() }} segment(s)
       } @else {
-        <span>Your uploaded audio</span>
+        Your uploaded sessions
       }
     </p>
   </div>
@@ -25,7 +21,7 @@
 </header>
 
 @if (service.loading()) {
-  <mat-progress-bar mode="indeterminate" class="top-progress"></mat-progress-bar>
+  <mat-progress-bar mode="indeterminate"></mat-progress-bar>
 }
 
 @if (service.error(); as err) {
@@ -37,105 +33,59 @@
 
 @if (!service.loading() && service.sessions().length === 0 && !service.error()) {
   <div class="empty">
-    <div class="empty__icon">
-      <mat-icon>inbox</mat-icon>
-    </div>
+    <mat-icon>inbox</mat-icon>
     <h3>No recordings yet</h3>
     <p>Start recording from the dashboard — segments upload here as they finish.</p>
   </div>
 }
 
 @if (service.sessions().length > 0) {
-  <div class="sessions">
-    @for (session of service.sessions(); track session.sessionId) {
-      <article class="session" [class.session--open]="isExpanded(session)">
-        <button
-          type="button"
-          class="session__head"
-          (click)="toggle(session)"
-          [attr.aria-expanded]="isExpanded(session)"
-        >
-          <div class="session__icon">
-            <mat-icon>graphic_eq</mat-icon>
-          </div>
+  <div class="table-wrap">
+    <table mat-table [dataSource]="service.sessions()" class="sessions-table">
+      <ng-container matColumnDef="date">
+        <th mat-header-cell *matHeaderCellDef>Session</th>
+        <td mat-cell *matCellDef="let session">
+          @if (sessionDate(session); as d) {
+            <div class="cell-title">{{ d | date: 'MMM d, y' }}</div>
+            <div class="cell-sub">{{ d | date: 'h:mm a' }}</div>
+          } @else {
+            <div class="cell-title mono">{{ session.sessionId }}</div>
+          }
+        </td>
+      </ng-container>
 
-          <div class="session__title">
-            @if (sessionDate(session); as d) {
-              <div class="session__name">{{ d | date: 'EEEE, MMM d' }}</div>
-              <div class="session__time">{{ d | date: 'h:mm a' }}</div>
-            } @else {
-              <div class="session__name">{{ session.sessionId }}</div>
-            }
-          </div>
+      <ng-container matColumnDef="files">
+        <th mat-header-cell *matHeaderCellDef>Segments</th>
+        <td mat-cell *matCellDef="let session">{{ session.files.length }}</td>
+      </ng-container>
 
-          <div class="session__chips">
-            <span class="chip chip--primary">
-              <mat-icon>audio_file</mat-icon>
-              {{ session.files.length }}
-            </span>
-            <span class="chip">
-              <mat-icon>schedule</mat-icon>
-              {{ sessionDuration(session) }}
-            </span>
-            <span class="chip chip--soft">{{ formatSize(session.totalSize) }}</span>
-          </div>
+      <ng-container matColumnDef="duration">
+        <th mat-header-cell *matHeaderCellDef>Duration</th>
+        <td mat-cell *matCellDef="let session">{{ sessionDuration(session) }}</td>
+      </ng-container>
 
-          <mat-icon class="session__chevron">
-            {{ isExpanded(session) ? 'expand_less' : 'expand_more' }}
-          </mat-icon>
-        </button>
+      <ng-container matColumnDef="size">
+        <th mat-header-cell *matHeaderCellDef>Size</th>
+        <td mat-cell *matCellDef="let session">{{ formatSize(session.totalSize) }}</td>
+      </ng-container>
 
-        @if (isExpanded(session)) {
-          <div class="session__body">
-            @for (file of session.files; track file.path) {
-              <div class="track" [class.track--active]="playingPath() === file.path">
-                <button
-                  type="button"
-                  class="track__play"
-                  [class.track__play--active]="playingPath() === file.path"
-                  (click)="playingPath() === file.path ? stopPlayback() : play(file)"
-                  [attr.aria-label]="playingPath() === file.path ? 'Stop' : 'Play'"
-                >
-                  <mat-icon>
-                    {{ playingPath() === file.path ? 'stop' : 'play_arrow' }}
-                  </mat-icon>
-                </button>
+      <ng-container matColumnDef="actions">
+        <th mat-header-cell *matHeaderCellDef class="actions-col"></th>
+        <td mat-cell *matCellDef="let session" class="actions-col">
+          <a
+            mat-flat-button
+            color="primary"
+            [routerLink]="['/recordings', session.sessionId]"
+            [disabled]="session.files.length === 0"
+          >
+            Go
+            <mat-icon iconPositionEnd>arrow_forward</mat-icon>
+          </a>
+        </td>
+      </ng-container>
 
-                <div class="track__info">
-                  <div class="track__name">{{ segmentLabel(file) }}</div>
-                  <div class="track__meta">
-                    <span>{{ formatSize(file.size) }}</span>
-                    @if (file.createdAt; as ts) {
-                      <span class="track__dot">·</span>
-                      <span>{{ ts | date: 'shortTime' }}</span>
-                    }
-                  </div>
-
-                  @if (playingPath() === file.path) {
-                    <audio
-                      class="track__player"
-                      controls
-                      autoplay
-                      preload="none"
-                      [src]="urlFor(file)"
-                      (ended)="stopPlayback()"
-                    ></audio>
-                  }
-                </div>
-
-                <button
-                  mat-icon-button
-                  matTooltip="Download"
-                  class="track__dl"
-                  (click)="download(file)"
-                >
-                  <mat-icon>download</mat-icon>
-                </button>
-              </div>
-            }
-          </div>
-        }
-      </article>
-    }
+      <tr mat-header-row *matHeaderRowDef="columns"></tr>
+      <tr mat-row *matRowDef="let row; columns: columns"></tr>
+    </table>
   </div>
 }

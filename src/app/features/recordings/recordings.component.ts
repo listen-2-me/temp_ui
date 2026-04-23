@@ -1,16 +1,13 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
 
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatCardModule } from '@angular/material/card';
+import { MatTableModule } from '@angular/material/table';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { MatChipsModule } from '@angular/material/chips';
 
 import {
-  RecordingFile,
   RecordingSession,
   RecordingsService,
 } from './services/recordings.service';
@@ -21,77 +18,26 @@ import {
   imports: [
     CommonModule,
     DatePipe,
+    RouterLink,
     MatButtonModule,
     MatIconModule,
-    MatCardModule,
+    MatTableModule,
     MatProgressBarModule,
-    MatTooltipModule,
-    MatSnackBarModule,
-    MatChipsModule,
   ],
   templateUrl: './recordings.component.html',
   styleUrl: './recordings.component.scss',
 })
 export class RecordingsComponent implements OnInit {
   readonly service = inject(RecordingsService);
-  private readonly snack = inject(MatSnackBar);
 
-  readonly playingPath = signal<string | null>(null);
-  readonly expanded = signal<Set<string>>(new Set());
+  readonly columns = ['date', 'files', 'duration', 'size', 'actions'];
 
   readonly totalFiles = computed(() =>
     this.service.sessions().reduce((sum, s) => sum + s.files.length, 0),
   );
 
-  readonly totalSize = computed(() =>
-    this.service.sessions().reduce((sum, s) => sum + s.totalSize, 0),
-  );
-
   ngOnInit(): void {
-    void this.service.refresh().then(() => {
-      const first = this.service.sessions()[0];
-      if (first) this.expanded.set(new Set([first.sessionId]));
-    });
-  }
-
-  isExpanded(session: RecordingSession): boolean {
-    return this.expanded().has(session.sessionId);
-  }
-
-  toggle(session: RecordingSession): void {
-    const next = new Set(this.expanded());
-    if (next.has(session.sessionId)) next.delete(session.sessionId);
-    else next.add(session.sessionId);
-    this.expanded.set(next);
-  }
-
-  urlFor(file: RecordingFile): string {
-    return this.service.publicUrl(file.path);
-  }
-
-  play(file: RecordingFile): void {
-    this.playingPath.set(file.path);
-  }
-
-  stopPlayback(): void {
-    this.playingPath.set(null);
-  }
-
-  download(file: RecordingFile): void {
-    try {
-      const link = document.createElement('a');
-      link.href = this.urlFor(file);
-      link.download = file.name;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    } catch (err) {
-      this.snack.open(
-        err instanceof Error ? err.message : 'Could not download recording.',
-        'Dismiss',
-        { duration: 4000 },
-      );
-    }
+    void this.service.refresh();
   }
 
   sessionDate(session: RecordingSession): Date | null {
@@ -102,11 +48,6 @@ export class RecordingsComponent implements OnInit {
     const iso = `${m[1]}T${m[2]}:${m[3]}:${m[4]}.${m[5]}Z`;
     const date = new Date(iso);
     return isNaN(date.getTime()) ? null : date;
-  }
-
-  segmentLabel(file: RecordingFile): string {
-    const m = file.name.match(/segment-(\d+)/);
-    return m ? `Segment ${parseInt(m[1], 10) + 1}` : file.name;
   }
 
   sessionDuration(session: RecordingSession): string {
