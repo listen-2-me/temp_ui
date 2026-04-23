@@ -4,20 +4,36 @@ import { firstValueFrom } from 'rxjs';
 import { SupabaseService } from '../../../core/supabase/supabase.service';
 import { AuthService } from '../../../core/auth/auth.service';
 
+// Audio quality knobs — tweak here and the worklet + encoder pick it up.
+const SEGMENT_SECONDS = 10;
+const REQUESTED_CHANNELS = 2;       // stereo when the mic supports it, mono otherwise
+const BIT_DEPTH: 16 | 24 = 16;      // 24 = audiophile, doubles file size
+const DISABLE_VOICE_DSP = true;     // turn off echoCancellation/noiseSuppression/AGC
+
 const WORKLET_PROCESSOR = `
   class RecorderProcessor extends AudioWorkletProcessor {
     process(inputs) {
       const input = inputs[0];
-      if (input && input[0]) {
-        this.port.postMessage(input[0].slice(0));
+      if (!input || input.length === 0 || !input[0]) return true;
+      const channels = input.length;
+      const frames = input[0].length;
+      const out = new Float32Array(channels * frames);
+      for (let f = 0; f < frames; f++) {
+        for (let c = 0; c < channels; c++) {
+          out[f * channels + c] = input[c][f];
+        }
       }
+      this.port.postMessage({ samples: out, channels });
       return true;
     }
   }
   registerProcessor('recorder-processor', RecorderProcessor);
 `;
 
-const SEGMENT_SECONDS = 10;
+interface SampleMessage {
+  samples: Float32Array;
+  channels: number;
+}
 
 @Injectable({ providedIn: 'root' })
 export class RecordingService {
@@ -28,14 +44,12 @@ export class RecordingService {
   private readonly _error = signal<string | null>(null);
   private readonly _segmentsUploaded = signal(0);
   private readonly _segmentsPending = signal(0);
-  private readonly _sessionId = signal<string | null>(null);
   private readonly _sessionPrefix = signal<string | null>(null);
 
   readonly isRecording = this._isRecording.asReadonly();
   readonly error = this._error.asReadonly();
   readonly segmentsUploaded = this._segmentsUploaded.asReadonly();
   readonly segmentsPending = this._segmentsPending.asReadonly();
-  readonly sessionId = this._sessionId.asReadonly();
   readonly sessionPrefix = this._sessionPrefix.asReadonly();
 
   private stream: MediaStream | null = null;
@@ -44,9 +58,10 @@ export class RecordingService {
   private worklet: AudioWorkletNode | null = null;
 
   private buffer: Float32Array[] = [];
-  private bufferedSamples = 0;
+  private bufferedFrames = 0;
+  private numChannels = 1;
   private sampleRate = 44100;
-  private segmentSamples = 0;
+  private segmentFrames = 0;
   private segmentIndex = 0;
   private currentSessionId = '';
   private currentUserId = '';
@@ -84,21 +99,37 @@ export class RecordingService {
     }
 
     try {
+      const audioConstraints: MediaTrackConstraints = {
+        channelCount: { ideal: REQUESTED_CHANNELS },
+        sampleRate: { ideal: 48000 },
+        sampleSize: { ideal: 24 },
+        echoCancellation: !DISABLE_VOICE_DSP,
+        noiseSuppression: !DISABLE_VOICE_DSP,
+        autoGainControl: !DISABLE_VOICE_DSP,
+      };
+
       this.stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
+        audio: audioConstraints,
       });
+
+      const track = this.stream.getAudioTracks()[0];
+      const settings = track?.getSettings?.();
+      if (settings) {
+        // Surface the negotiated settings so you can tell what the browser actually gave you.
+        // eslint-disable-next-line no-console
+        console.info('[recording] track settings', settings);
+      }
 
       const AudioCtxCtor =
         window.AudioContext ??
         (window as unknown as { webkitAudioContext: typeof AudioContext })
           .webkitAudioContext;
-      this.audioCtx = new AudioCtxCtor();
+      this.audioCtx = new AudioCtxCtor({
+        latencyHint: 'playback',
+        sampleRate: settings?.sampleRate,
+      });
       this.sampleRate = this.audioCtx.sampleRate;
-      this.segmentSamples = Math.round(this.sampleRate * SEGMENT_SECONDS);
+      this.segmentFrames = Math.round(this.sampleRate * SEGMENT_SECONDS);
 
       const blob = new Blob([WORKLET_PROCESSOR], {
         type: 'application/javascript',
@@ -113,8 +144,12 @@ export class RecordingService {
       this.resetSession(userId);
 
       this.source = this.audioCtx.createMediaStreamSource(this.stream);
-      this.worklet = new AudioWorkletNode(this.audioCtx, 'recorder-processor');
-      this.worklet.port.onmessage = (event: MessageEvent<Float32Array>) => {
+      this.worklet = new AudioWorkletNode(this.audioCtx, 'recorder-processor', {
+        channelCount: REQUESTED_CHANNELS,
+        channelCountMode: 'explicit',
+        channelInterpretation: 'speakers',
+      });
+      this.worklet.port.onmessage = (event: MessageEvent<SampleMessage>) => {
         this.onSamples(event.data);
       };
       this.source.connect(this.worklet);
@@ -130,8 +165,6 @@ export class RecordingService {
   async stop(): Promise<void> {
     if (!this._isRecording()) return;
 
-    // Disconnect the audio graph so no more samples arrive, then flush any
-    // leftover audio that hasn't hit the 10s boundary as a final segment.
     try {
       this.source?.disconnect();
       this.worklet?.disconnect();
@@ -139,8 +172,8 @@ export class RecordingService {
       // Ignore — cleanup below resets state regardless.
     }
 
-    if (this.bufferedSamples > 0) {
-      const remaining = this.takeSamples(this.bufferedSamples);
+    if (this.bufferedFrames > 0) {
+      const remaining = this.takeFrames(this.bufferedFrames);
       this.enqueueSegment(remaining);
     }
 
@@ -148,22 +181,24 @@ export class RecordingService {
     this._isRecording.set(false);
   }
 
-  private onSamples(chunk: Float32Array): void {
-    this.buffer.push(chunk);
-    this.bufferedSamples += chunk.length;
+  private onSamples({ samples, channels }: SampleMessage): void {
+    this.numChannels = channels;
+    this.buffer.push(samples);
+    this.bufferedFrames += samples.length / channels;
 
-    while (this.bufferedSamples >= this.segmentSamples) {
-      const segment = this.takeSamples(this.segmentSamples);
+    while (this.bufferedFrames >= this.segmentFrames) {
+      const segment = this.takeFrames(this.segmentFrames);
       this.enqueueSegment(segment);
     }
   }
 
-  private takeSamples(count: number): Float32Array {
-    const out = new Float32Array(count);
+  private takeFrames(frameCount: number): Float32Array {
+    const interleavedCount = frameCount * this.numChannels;
+    const out = new Float32Array(interleavedCount);
     let filled = 0;
-    while (filled < count && this.buffer.length > 0) {
+    while (filled < interleavedCount && this.buffer.length > 0) {
       const first = this.buffer[0];
-      const needed = count - filled;
+      const needed = interleavedCount - filled;
       if (first.length <= needed) {
         out.set(first, filled);
         filled += first.length;
@@ -174,14 +209,19 @@ export class RecordingService {
         filled += needed;
       }
     }
-    this.bufferedSamples -= filled;
+    this.bufferedFrames -= filled / this.numChannels;
     return out;
   }
 
-  private enqueueSegment(samples: Float32Array): void {
-    if (samples.length === 0) return;
+  private enqueueSegment(interleaved: Float32Array): void {
+    if (interleaved.length === 0) return;
     const index = this.segmentIndex++;
-    const blob = encodeWav(samples, this.sampleRate);
+    const blob = encodeWav(
+      interleaved,
+      this.sampleRate,
+      this.numChannels,
+      BIT_DEPTH,
+    );
     const path = `${this.currentUserId}/${this.currentSessionId}/segment-${String(index).padStart(4, '0')}.wav`;
     this.uploadQueue.push({ path, blob });
     this._segmentsPending.update(n => n + 1);
@@ -203,7 +243,6 @@ export class RecordingService {
           this._error.set(
             `Upload failed for ${job.path}: ${this.describeError(err)}`,
           );
-          // Drop the failed segment so the queue doesn't stall forever.
           this.uploadQueue.shift();
           this._segmentsPending.update(n => Math.max(0, n - 1));
         }
@@ -215,7 +254,8 @@ export class RecordingService {
 
   private resetSession(userId: string): void {
     this.buffer = [];
-    this.bufferedSamples = 0;
+    this.bufferedFrames = 0;
+    this.numChannels = 1;
     this.segmentIndex = 0;
     this.uploadQueue = [];
     this._segmentsUploaded.set(0);
@@ -224,7 +264,6 @@ export class RecordingService {
     this.currentSessionId = new Date()
       .toISOString()
       .replace(/[:.]/g, '-');
-    this._sessionId.set(this.currentSessionId);
     this._sessionPrefix.set(`${userId}/${this.currentSessionId}`);
   }
 
@@ -273,13 +312,16 @@ export class RecordingService {
   }
 }
 
-function encodeWav(samples: Float32Array, sampleRate: number): Blob {
-  const numChannels = 1;
-  const bitsPerSample = 16;
+function encodeWav(
+  interleaved: Float32Array,
+  sampleRate: number,
+  numChannels: number,
+  bitsPerSample: 16 | 24,
+): Blob {
   const bytesPerSample = bitsPerSample / 8;
   const blockAlign = numChannels * bytesPerSample;
   const byteRate = sampleRate * blockAlign;
-  const dataSize = samples.length * bytesPerSample;
+  const dataSize = interleaved.length * bytesPerSample;
   const buffer = new ArrayBuffer(44 + dataSize);
   const view = new DataView(buffer);
 
@@ -300,9 +342,24 @@ function encodeWav(samples: Float32Array, sampleRate: number): Blob {
   view.setUint32(40, dataSize, true);
 
   let offset = 44;
-  for (let i = 0; i < samples.length; i++, offset += 2) {
-    const clamped = Math.max(-1, Math.min(1, samples[i]));
-    view.setInt16(offset, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true);
+  if (bitsPerSample === 16) {
+    for (let i = 0; i < interleaved.length; i++, offset += 2) {
+      const clamped = Math.max(-1, Math.min(1, interleaved[i]));
+      view.setInt16(
+        offset,
+        clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff,
+        true,
+      );
+    }
+  } else {
+    for (let i = 0; i < interleaved.length; i++, offset += 3) {
+      const clamped = Math.max(-1, Math.min(1, interleaved[i]));
+      const signed = Math.round(clamped * 0x7fffff);
+      const unsigned = signed < 0 ? signed + 0x1000000 : signed;
+      view.setUint8(offset, unsigned & 0xff);
+      view.setUint8(offset + 1, (unsigned >> 8) & 0xff);
+      view.setUint8(offset + 2, (unsigned >> 16) & 0xff);
+    }
   }
 
   return new Blob([buffer], { type: 'audio/wav' });
