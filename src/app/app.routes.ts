@@ -43,13 +43,6 @@ export const routes: Routes = [
             './features/recordings/session-detail/session-detail.component'
           ).then(m => m.SessionDetailComponent),
       },
-      {
-        path: 'settings',
-        loadComponent: () =>
-          import('./features/settings/settings.component').then(
-            m => m.SettingsComponent,
-          ),
-      },
     ],
   },
   { path: '**', redirectTo: 'dashboard' },
