@@ -53,6 +53,16 @@
             preload="none"
             [src]="urlFor(file)"
           ></audio>
+
+          @if (transcriptionFor(file); as t) {
+            <div class="segment-card__transcription">
+              <div class="segment-card__transcription-label">
+                <mat-icon>subject</mat-icon>
+                <span>Transcription</span>
+              </div>
+              <p>{{ t.transcription }}</p>
+            </div>
+          }
         </mat-card-content>
 
         <mat-card-actions align="end">

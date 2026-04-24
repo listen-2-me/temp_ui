@@ -20,6 +20,7 @@ import {
   RecordingFile,
   RecordingSession,
   RecordingsService,
+  TranscriptionResult,
 } from '../services/recordings.service';
 
 @Component({
@@ -47,6 +48,8 @@ export class SessionDetailComponent implements OnInit {
   private readonly snack = inject(MatSnackBar);
 
   readonly notFound = signal(false);
+  readonly transcriptions = signal<Record<string, TranscriptionResult>>({});
+  private readonly transcriptionsLoadedFor = signal<string | null>(null);
 
   readonly session = computed<RecordingSession | null>(() => {
     const id = this.sessionId();
@@ -69,9 +72,39 @@ export class SessionDetailComponent implements OnInit {
     if (this.service.sessions().length === 0) {
       await this.service.refresh();
     }
-    if (!this.session()) {
+    const session = this.session();
+    if (!session) {
       this.notFound.set(true);
+      return;
     }
+    await this.loadTranscriptions(session);
+  }
+
+  private async loadTranscriptions(session: RecordingSession): Promise<void> {
+    if (this.transcriptionsLoadedFor() === session.sessionId) return;
+    this.transcriptionsLoadedFor.set(session.sessionId);
+
+    const results = await Promise.all(
+      session.files.map(async file => {
+        const result = await this.service.fetchTranscription(
+          session.sessionId,
+          file.name,
+        );
+        return [file.path, result] as const;
+      }),
+    );
+
+    const map: Record<string, TranscriptionResult> = {};
+    for (const [path, result] of results) {
+      if (result && result.status === 'COMPLETED') {
+        map[path] = result;
+      }
+    }
+    this.transcriptions.set(map);
+  }
+
+  transcriptionFor(file: RecordingFile): TranscriptionResult | null {
+    return this.transcriptions()[file.path] ?? null;
   }
 
   urlFor(file: RecordingFile): string {

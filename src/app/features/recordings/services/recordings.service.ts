@@ -1,11 +1,26 @@
 import { Injectable, inject, signal } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 
+import { environment } from '../../../../environments/environment';
 import { AuthService } from '../../../core/auth/auth.service';
 import {
   StorageEntry,
   SupabaseService,
 } from '../../../core/supabase/supabase.service';
+
+export type TranscriptionStatus =
+  | 'PENDING'
+  | 'PROCESSING'
+  | 'COMPLETED'
+  | 'FAILED'
+  | string;
+
+export interface TranscriptionResult {
+  storage_events_id: string;
+  transcription: string;
+  status: TranscriptionStatus;
+}
 
 export interface RecordingFile {
   name: string;
@@ -27,6 +42,8 @@ export interface RecordingSession {
 export class RecordingsService {
   private readonly supabase = inject(SupabaseService);
   private readonly auth = inject(AuthService);
+  private readonly http = inject(HttpClient);
+  private readonly apiBase = environment.apiBaseUrl;
 
   private readonly _sessions = signal<RecordingSession[]>([]);
   private readonly _loading = signal(false);
@@ -100,6 +117,28 @@ export class RecordingsService {
 
   publicUrl(path: string): string {
     return this.supabase.getPublicUrl(path);
+  }
+
+  async fetchTranscription(
+    sessionId: string,
+    segmentName: string,
+  ): Promise<TranscriptionResult | null> {
+    const userId = await this.resolveUserId();
+    if (!userId) return null;
+    const params = new URLSearchParams({
+      user_id: userId,
+      session_id: sessionId,
+      segment_name: segmentName,
+    });
+    try {
+      return await firstValueFrom(
+        this.http.get<TranscriptionResult>(
+          `${this.apiBase}/transcriptions?${params.toString()}`,
+        ),
+      );
+    } catch {
+      return null;
+    }
   }
 
   private async resolveUserId(): Promise<string | null> {
