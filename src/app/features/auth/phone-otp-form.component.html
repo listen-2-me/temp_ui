@@ -100,9 +100,11 @@
       }
     </mat-card-content>
 
-    <mat-card-actions class="auth-alt">
-      <span>{{ altPrompt() }}</span>
-      <a mat-button color="primary" [routerLink]="altRoute()">{{ altCta() }}</a>
-    </mat-card-actions>
+    @if (showAltRoute()) {
+      <mat-card-actions class="auth-alt">
+        <span>{{ altPrompt() }}</span>
+        <a mat-button color="primary" [routerLink]="altRoute()">{{ altCta() }}</a>
+      </mat-card-actions>
+    }
   </mat-card>
 </div>
