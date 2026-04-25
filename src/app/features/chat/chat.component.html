@@ -1,0 +1,129 @@
+<section class="chat-shell">
+  <header class="chat-header">
+    <div class="chat-header__title">
+      <mat-icon>forum</mat-icon>
+      <h1>Ask your recordings</h1>
+    </div>
+    <button
+      mat-stroked-button
+      type="button"
+      (click)="clear()"
+      [disabled]="chat.messages().length === 0 || chat.sending()"
+      matTooltip="Clear conversation"
+    >
+      <mat-icon>delete_sweep</mat-icon>
+      Clear
+    </button>
+  </header>
+
+  @if (recordings.loading() && !recordingsLoaded()) {
+    <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+  }
+
+  <div class="chat-scroll" #scroller>
+    @if (chat.isEmpty()) {
+      <div class="chat-empty">
+        <mat-icon>chat_bubble_outline</mat-icon>
+        <h3>Ask anything about your recordings</h3>
+        <p>
+          @if (hasSound()) {
+            Try “What did I talk about today?” or “Summarize my last meeting.”
+          } @else if (recordingsLoaded()) {
+            You don't have any recordings yet. Record some audio first, then come back to chat.
+          } @else {
+            Loading your recordings…
+          }
+        </p>
+      </div>
+    } @else {
+      @for (msg of chat.messages(); track msg.id) {
+        <div class="chat-row" [class.chat-row--user]="msg.role === 'user'">
+          <div
+            class="chat-bubble"
+            [class.chat-bubble--user]="msg.role === 'user'"
+            [class.chat-bubble--assistant]="msg.role === 'assistant'"
+            [class.chat-bubble--error]="msg.error"
+          >
+            <div class="chat-bubble__text">{{ msg.text }}</div>
+
+            @if (msg.matches?.length) {
+              <details class="chat-sources">
+                <summary>
+                  <mat-icon>source</mat-icon>
+                  {{ msg.matches?.length }} source{{ msg.matches?.length === 1 ? '' : 's' }}
+                </summary>
+                <ol class="chat-sources__list">
+                  @for (m of msg.matches; track $index) {
+                    <li class="chat-source">
+                      <p class="chat-source__text">{{ m.transcription }}</p>
+                      <div class="chat-source__meta">
+                        @if (m.createdAt) {
+                          <span>{{ m.createdAt | date: 'MMM d, h:mm a' }}</span>
+                        }
+                        @if (m.similarityScore != null) {
+                          <span class="chat-source__score">
+                            {{ (m.similarityScore * 100) | number: '1.0-0' }}%
+                          </span>
+                        }
+                      </div>
+                    </li>
+                  }
+                </ol>
+              </details>
+            }
+
+            <div class="chat-bubble__meta">
+              {{ msg.createdAt | date: 'shortTime' }}
+            </div>
+          </div>
+        </div>
+      }
+      @if (chat.sending()) {
+        <div class="chat-row">
+          <div class="chat-bubble chat-bubble--assistant chat-bubble--typing">
+            <span></span><span></span><span></span>
+          </div>
+        </div>
+      }
+    }
+  </div>
+
+  <form
+    [formGroup]="form"
+    (ngSubmit)="submit()"
+    class="chat-composer"
+  >
+    @if (!hasSound() && recordingsLoaded()) {
+      <p class="chat-composer__hint">
+        <mat-icon>info</mat-icon>
+        Record some audio first to enable chat.
+      </p>
+    }
+
+    <mat-form-field appearance="outline" class="chat-composer__field">
+      <mat-label>Ask about your recordings</mat-label>
+      <textarea
+        matInput
+        rows="2"
+        formControlName="query"
+        placeholder="e.g. Ne konuştum, özetler misin?"
+        (keydown)="onTextareaKeydown($event)"
+      ></textarea>
+    </mat-form-field>
+
+    <button
+      mat-flat-button
+      color="primary"
+      type="submit"
+      class="chat-composer__send"
+      [disabled]="form.invalid || chat.sending() || !hasSound()"
+      [matTooltip]="hasSound() ? 'Send' : 'Record audio first'"
+    >
+      @if (chat.sending()) {
+        <mat-icon>hourglass_top</mat-icon>
+      } @else {
+        <mat-icon>send</mat-icon>
+      }
+    </button>
+  </form>
+</section>

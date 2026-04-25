@@ -64,6 +64,7 @@ export class MainLayoutComponent implements OnInit {
   readonly navItems: NavItem[] = [
     { label: 'Dashboard', icon: 'dashboard', route: '/dashboard' },
     { label: 'Recordings', icon: 'library_music', route: '/recordings' },
+    { label: 'Chat', icon: 'forum', route: '/chat' },
   ];
 
   constructor() {
