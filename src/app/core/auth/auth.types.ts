@@ -8,6 +8,7 @@ export interface AuthTokens {
 
 export interface OtpInitResponse {
   status: 'otp_sent' | string;
+  action?: 'login' | 'registered';
 }
 
 export interface User {

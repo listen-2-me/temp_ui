@@ -51,7 +51,7 @@ export class AuthService {
   }
 
   login(phoneNumber: string): Observable<OtpInitResponse> {
-    return this.http.post<OtpInitResponse>(`${this.api}/auth/login`, { phoneNumber });
+    return this.http.post<OtpInitResponse>(`${this.api}/auth/login-register`, { phoneNumber });
   }
 
   verifyLogin(phoneNumber: string, code: string): Observable<AuthTokens> {

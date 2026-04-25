@@ -36,7 +36,6 @@ const ERROR_MESSAGES: Record<AuthMode, Record<number, string>> = {
     400: 'Phone number is required.',
     401: 'Invalid or expired code.',
     403: 'This account has been blocked. Contact support.',
-    404: 'No account found with this phone number. Try registering first.',
   },
   register: {
     400: 'Phone number is required.',
@@ -90,18 +89,20 @@ export class PhoneOtpFormComponent {
   });
 
   readonly title = computed(() =>
-    this.mode() === 'login' ? 'Welcome back' : 'Create your account',
+    this.mode() === 'login' ? 'Sign in or sign up' : 'Create your account',
   );
 
   readonly subtitle = computed(() =>
     this.mode() === 'login'
-      ? 'Sign in with your phone number.'
+      ? 'Enter your phone number — we\'ll send a verification code.'
       : 'We\'ll send a verification code to your phone.',
   );
 
   readonly primaryCta = computed(() =>
-    this.mode() === 'login' ? 'Send login code' : 'Send verification code',
+    this.mode() === 'login' ? 'Send code' : 'Send verification code',
   );
+
+  readonly showAltRoute = computed(() => this.mode() === 'register');
 
   readonly altRoute = computed(() =>
     this.mode() === 'login' ? '/register' : '/login',
